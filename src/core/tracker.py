@@ -63,3 +63,36 @@ def check_single_product(product: sqlite3.Row, db: DBManager, config: ConfigMana
     finally:
         # 4. Veritabanını her durumda güncelle
         db.update_product(product['id'], update_data)
+
+# src/core/tracker.py dosyasının en altına eklenecek YENİ fonksiyon
+
+def run_all_active_product_checks():
+    """
+    Tüm aktif ürünleri kontrol eden, kendi veritabanı bağlantısını oluşturan
+    ve işi bittiğinde kapatan, thread-uyumlu ana fonksiyondur.
+    Arayüzdeki "Fiyatları Kontrol Et" butonu bu fonksiyonu çağıracaktır.
+    """
+    db = None
+    try:
+        print("Thread-uyumlu kontrol işlemi başlatılıyor...")
+        # 1. Bu thread için yeni bir veritabanı bağlantısı oluştur
+        db = DBManager()
+        config = ConfigManager(db)
+
+        products_to_check = db.get_active_products_for_check()
+        if not products_to_check:
+            print("Kontrol edilecek aktif ürün bulunamadı.")
+            return
+
+        # 2. Ürünleri kontrol et
+        for product in products_to_check:
+            # check_single_product fonksiyonu zaten db ve config bekliyor
+            check_single_product(product, db, config)
+
+    except Exception as e:
+        print(f"run_all_active_product_checks içinde hata oluştu: {e}")
+    finally:
+        # 3. Bu thread'e ait veritabanı bağlantısını güvenle kapat
+        if db:
+            db.close()
+            print("Thread-uyumlu kontrol işlemi bitti, bağlantı kapatıldı.")
