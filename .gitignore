@@ -1,0 +1,30 @@
+# .gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Sanal Ortam
+venv/
+env/
+.env
+
+# Veritabanı dosyaları
+*.db
+*.sqlite3
+
+# Hassas Bilgiler
+.env
+config.ini
+
+# IDE ve OS özel dosyaları
+.idea/
+.vscode/
+.DS_Store
+
+# Paketleme çıktıları
+/dist/
+/build/
+*.spec
