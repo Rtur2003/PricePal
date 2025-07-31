@@ -1,64 +1,91 @@
-# src/scraping/base_scraper.py
+# src/scraping/base_scraper.py (YENİ HALİ)
 
 from abc import ABC, abstractmethod
-import requests
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 from ..utils.exceptions import ScraperError
-import time # <-- BU SATIRI EKLEYİN
+from ..utils import constants   
+
+class WebDriverManager:
+    """
+    Selenium WebDriver'ı tek bir örnek (singleton) olarak yönetir.
+    Uygulama boyunca sadece bir tarayıcı penceresi açılmasını sağlar.
+    """
+    _driver = None
+
+    @classmethod
+    def get_driver(cls):
+        if cls._driver is None:
+            print("WebDriver başlatılıyor...")
+            options = Options()
+            options.add_argument("--headless")  # Tarayıcıyı arayüz olmadan (arka planda) çalıştırır
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-blink-features=AutomationControlled") # Bot tespitini zorlaştırır
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            options.add_experimental_option('useAutomationExtension', False)
+            options.add_argument(f"user-agent={constants.DEFAULT_USER_AGENT}")
+            options.add_argument('--log-level=3')   
+            options.add_experimental_option('excludeSwitches', ['enable-logging'])
+            # ---------------------
+            try:
+                service = ChromeService(ChromeDriverManager().install())
+                cls._driver = webdriver.Chrome(service=service, options=options)
+                cls._driver.set_page_load_timeout(45) # Sayfa yükleme zaman aşımını artırdık
+                print("WebDriver başarıyla başlatıldı.")
+            except Exception as e:
+                print(f"WebDriver başlatılamadı: {e}")
+                raise ScraperError(f"WebDriver başlatılamadı: {e}")
+        return cls._driver
+
+    @classmethod
+    def close_driver(cls):
+        if cls._driver is not None:
+            print("WebDriver kapatılıyor...")
+            cls._driver.quit()
+            cls._driver = None
+            print("WebDriver kapatıldı.")
+
 
 class BaseScraper(ABC):
     """
-    Tüm scraper sınıfları için temel arayüzü ve ortak işlevleri tanımlar.
+    Tüm scraper sınıfları için Selenium tabanlı yeni temel arayüz.
     """
     def __init__(self, url: str):
         self.url = url
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        })
+        self.driver = WebDriverManager.get_driver()
 
-    # get_page_content METODUNU AŞAĞIDAKİ İLE DEĞİŞTİRİN
     def get_page_content(self) -> BeautifulSoup:
         """
-        Belirtilen URL'nin HTML içeriğini çeker ve BeautifulSoup nesnesi olarak döndürür.
-        Başarısız olursa birkaç kez tekrar dener.
+        Belirtilen URL'nin HTML içeriğini Selenium ile çeker ve BeautifulSoup nesnesi olarak döndürür.
         """
-        retries = 3  # Toplam deneme hakkı
-        timeout_seconds = 30 # Zaman aşımı süresini 30 saniyeye çıkardık
-
+        retries = 2
         for attempt in range(retries):
             try:
-                print(f"  -> Sayfa içeriği getiriliyor (Deneme {attempt + 1}/{retries})...")
-                response = self.session.get(self.url, timeout=timeout_seconds)
-                response.raise_for_status() # HTTP 2xx dışında bir durum kodu varsa hata fırlatır
-                return BeautifulSoup(response.content, 'html.parser')
-            
-            except requests.exceptions.RequestException as e:
-                print(f"  -> Ağ hatası (Deneme {attempt + 1}): {e}")
+                print(f"  -> Sayfa yükleniyor (Deneme {attempt + 1}/{retries})...")
+                self.driver.get(self.url)
+                # Sayfanın dinamik içeriğinin yüklenmesi için bir süre bekleyelim
+                time.sleep(5) 
+                return BeautifulSoup(self.driver.page_source, 'html.parser')
+            except Exception as e:
+                print(f"  -> Sayfa yükleme hatası (Deneme {attempt + 1}): {e}")
                 if attempt < retries - 1:
-                    # Son deneme değilse, bir süre bekle ve tekrar dene
-                    sleep_time = 5
-                    print(f"  -> {sleep_time} saniye bekleniyor...")
-                    time.sleep(sleep_time)
+                    time.sleep(5)
                 else:
-                    # Tüm denemeler başarısız olduysa, ana hatayı fırlat
-                    raise ScraperError(f"Tüm denemelerden sonra URL'ye erişilemedi: {e}")
+                    raise ScraperError(f"Tüm denemelerden sonra URL yüklenemedi: {self.url}")
 
+    # ... clean_price metodu aynı kalıyor ...
     @staticmethod
     def clean_price(price_text: str) -> float:
-        """
-        '1.499,90 TL' gibi metinleri 1499.90 gibi bir float sayıya dönüştürür.
-        """
-        # ... Bu metodun içeriği aynı kalacak ...
-        if not price_text:
-            return 0.0
-        
+        if not price_text: return 0.0
         price_text = price_text.lower().replace('tl', '').replace('₺', '').strip()
         price_text = price_text.replace('.', '').replace(',', '.')
-        
         valid_chars = "0123456789."
         cleaned_price = "".join(c for c in price_text if c in valid_chars)
-        
         try:
             return float(cleaned_price)
         except (ValueError, TypeError):
@@ -66,9 +93,4 @@ class BaseScraper(ABC):
 
     @abstractmethod
     def scrape(self) -> dict:
-        """
-        Bu metot, her alt sınıf tarafından kendi sitesine özel olarak
-        uygulanmalıdır. Ürün adı ve fiyatını kazımalıdır.
-        :return: {'name': str, 'price': float} formatında bir sözlük.
-        """
         pass

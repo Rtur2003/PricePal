@@ -2,6 +2,7 @@
 
 import keyring
 from ..database.db_manager import DBManager
+from ..utils import constants
 
 class ConfigManager:
     """
@@ -9,7 +10,6 @@ class ConfigManager:
     Ayarları veritabanından, şifreleri ise işletim sisteminin
     güvenli anahtar zincirinden (keyring) okur/yazar.
     """
-    SERVICE_ID = 'PricePal'  # Keyring için benzersiz servis adı
 
     def __init__(self, db_manager: DBManager):
         """
@@ -37,7 +37,7 @@ class ConfigManager:
         """
         try:
             self.set('user_email', email)
-            keyring.set_password(self.SERVICE_ID, email, password)
+            keyring.set_password(constants.SERVICE_ID, email, password)
             print("E-posta kimlik bilgileri güvenli bir şekilde kaydedildi.")
             return True
         except Exception as e:
@@ -53,7 +53,7 @@ class ConfigManager:
         if not email:
             return None
         try:
-            return keyring.get_password(self.SERVICE_ID, email)
+            return keyring.get_password(constants.SERVICE_ID, email)
         except Exception as e:
             print(f"Keyring'den şifre okunurken hata oluştu: {e}")
             return None

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 import sqlite3
-
+from ..scraping.base_scraper import WebDriverManager
 from ..database.db_manager import DBManager
 from ..core.config_manager import ConfigManager
 from ..scraping import scraper_factory
@@ -25,13 +25,17 @@ def check_single_product(product: sqlite3.Row, db: DBManager, config: ConfigMana
         scraped_data = scraper.scrape()
         current_price = scraped_data['price']
 
+        # YENİ EKLENEN SATIR: Fiyat geçmişini kaydet
+        if current_price > 0:
+            db.add_price_history(product['id'], current_price)
+
         # Ürün adı ilk kez çekiliyorsa veya değişmişse güncelle
         if product['name'] is None or product['name'] != scraped_data['name']:
             update_data['name'] = scraped_data['name']
         
         update_data['current_price'] = current_price
         
-        # 2. Fiyatı karşılaştır
+        # 2. Fiyatı karşılaştır (Bu kısım aynı kalıyor)
         if current_price > 0 and current_price <= product['target_price']:
             print(f"  -> FİYAT DÜŞTÜ! Yeni Fiyat: {current_price} TL")
             update_data['status'] = 'PRICE_ALERT'
@@ -66,33 +70,25 @@ def check_single_product(product: sqlite3.Row, db: DBManager, config: ConfigMana
 
 # src/core/tracker.py dosyasının en altına eklenecek YENİ fonksiyon
 
+
 def run_all_active_product_checks():
-    """
-    Tüm aktif ürünleri kontrol eden, kendi veritabanı bağlantısını oluşturan
-    ve işi bittiğinde kapatan, thread-uyumlu ana fonksiyondur.
-    Arayüzdeki "Fiyatları Kontrol Et" butonu bu fonksiyonu çağıracaktır.
-    """
     db = None
     try:
         print("Thread-uyumlu kontrol işlemi başlatılıyor...")
-        # 1. Bu thread için yeni bir veritabanı bağlantısı oluştur
         db = DBManager()
         config = ConfigManager(db)
-
         products_to_check = db.get_active_products_for_check()
         if not products_to_check:
             print("Kontrol edilecek aktif ürün bulunamadı.")
             return
 
-        # 2. Ürünleri kontrol et
         for product in products_to_check:
-            # check_single_product fonksiyonu zaten db ve config bekliyor
             check_single_product(product, db, config)
-
     except Exception as e:
         print(f"run_all_active_product_checks içinde hata oluştu: {e}")
     finally:
-        # 3. Bu thread'e ait veritabanı bağlantısını güvenle kapat
         if db:
             db.close()
-            print("Thread-uyumlu kontrol işlemi bitti, bağlantı kapatıldı.")
+        # İŞLEM BİTTİĞİNDE TARAYICIYI KAPAT
+        WebDriverManager.close_driver() 
+        print("Thread-uyumlu kontrol işlemi bitti, kaynaklar serbest bırakıldı.")

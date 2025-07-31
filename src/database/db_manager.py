@@ -3,6 +3,7 @@
 import sqlite3
 from pathlib import Path
 from datetime import datetime
+from ..utils import constants
 
 class DBManager:
     """
@@ -10,7 +11,7 @@ class DBManager:
     (CRUD: Create, Read, Update, Delete)
     """
 
-    def __init__(self, db_name="pricepal.db"):
+    def __init__(self, db_name=constants.DB_NAME):
         """
         Veritabanı bağlantısını başlatır ve tabloların var olduğundan emin olur.
         """
@@ -126,3 +127,23 @@ class DBManager:
     def __del__(self):
         """Nesne silindiğinde bağlantının kapandığından emin olur."""
         self.close()
+
+    def add_price_history(self, product_id: int, price: float):
+        """
+        Bir ürün için yeni bir fiyat kaydı ekler.
+        """
+        sql = "INSERT INTO price_history (product_id, price, check_date) VALUES (?, ?, ?)"
+        check_date = datetime.now().isoformat()
+        try:
+            self.cursor.execute(sql, (product_id, price, check_date))
+            self.conn.commit()
+        except sqlite3.Error as e:
+            print(f"Fiyat geçmişi eklenirken hata oluştu: {e}")
+
+    def get_price_history(self, product_id: int) -> list[sqlite3.Row]:
+        """
+        Belirli bir ürünün tüm fiyat geçmişini, eskiden yeniye doğru sıralı şekilde getirir.
+        """
+        sql = "SELECT price, check_date FROM price_history WHERE product_id = ? ORDER BY check_date ASC"
+        self.cursor.execute(sql, (product_id,))
+        return self.cursor.fetchall()    

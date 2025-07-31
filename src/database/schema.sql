@@ -27,3 +27,13 @@ INSERT OR IGNORE INTO settings (key, value) VALUES ('theme', 'litera'); -- ttkbo
 INSERT OR IGNORE INTO settings (key, value) VALUES ('user_email', '');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('smtp_host', 'smtp.gmail.com');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('smtp_port', '587');
+
+
+-- Her ürünün fiyat geçmişini tutan tablo
+CREATE TABLE IF NOT EXISTS price_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    price REAL NOT NULL,
+    check_date TEXT NOT NULL,
+    FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
+);

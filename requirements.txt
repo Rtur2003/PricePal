@@ -2,3 +2,7 @@ requests
 beautifulsoup4
 ttkbootstrap
 keyring
+selenium
+webdriver-manager
+python-dotenv
+matplotlib
